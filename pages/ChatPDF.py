@@ -21,7 +21,6 @@ if "chat_history" not in st.session_state:
 # --- API 키 입력
 st.sidebar.header("🔐 OpenAI API 설정")
 st.session_state.api_key = st.sidebar.text_input("API Key 입력", type="password", value=st.session_state.api_key)
-
 openai.api_key = st.session_state.api_key
 
 # --- 초기화 버튼
@@ -38,12 +37,17 @@ question = st.text_input("궁금한 내용을 입력하세요:")
 
 # --- 어시스턴트 생성 함수
 def init_assistant(file_id):
+    # ✅ 디버깅 정보 출력
+    st.write("✅ file_id 확인:", file_id)
+    st.write("✅ file_id 타입:", type(file_id))
+    st.write("✅ file_ids 포장 상태:", [file_id])
+
     assistant = openai.beta.assistants.create(
         name="PDF Assistant",
         instructions="사용자가 업로드한 PDF 내용을 바탕으로 질문에 답하세요.",
         model="gpt-4-turbo",
         tools=[{"type": "file_search"}],
-        file_ids=[file_id]
+        file_ids=[file_id]  # 반드시 리스트로
     )
     st.session_state.assistant_id = assistant.id
 
@@ -94,8 +98,15 @@ if st.button("전송") and uploaded_file and question.strip():
     with open(tmp_path, "rb") as f:
         uploaded = openai.files.create(file=f, purpose="assistants")
 
+    # ✅ uploaded 객체 디버깅
+    st.write("🔍 uploaded 객체:", uploaded)
+    st.write("🔍 uploaded.id:", getattr(uploaded, "id", "❌ 없음"))
+    st.write("🔍 uploaded 타입:", type(uploaded))
+
+    file_id = uploaded.id if hasattr(uploaded, "id") else uploaded["id"]
+
     if st.session_state.assistant_id is None:
-        init_assistant(uploaded.id)
+        init_assistant(file_id)
     if st.session_state.thread_id is None:
         init_thread()
 
