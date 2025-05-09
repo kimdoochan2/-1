@@ -1,3 +1,6 @@
+import openai
+st.sidebar.write("📦 OpenAI 버전:", openai.__version__)
+
 import streamlit as st
 from openai import OpenAI
 import tempfile
