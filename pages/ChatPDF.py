@@ -66,25 +66,23 @@ def init_thread():
 def ask_question(question):
     openai.api_key = st.session_state.api_key
 
-    # 사용자 질문 추가
     openai.beta.threads.messages.create(
         thread_id=st.session_state.thread_id,
         role="user",
         content=question,
     )
 
-    # Run 생성 시 file_id 연결
     run = openai.beta.threads.runs.create(
         thread_id=st.session_state.thread_id,
         assistant_id=st.session_state.assistant_id,
         tool_resources={
             "file_search": {
-                "file_ids": [st.session_state.file_id]
+                "file_ids": [st.session_state.file_id],
+                "vector_store_ids": []  # ✅ 필수 필드로 추가됨
             }
         }
     )
 
-    # 응답 대기
     with st.spinner("🤖 GPT가 응답을 생성 중입니다..."):
         while True:
             status = openai.beta.threads.runs.retrieve(
@@ -97,7 +95,6 @@ def ask_question(question):
                 return "❌ 실행 실패"
             time.sleep(1)
 
-        # 응답 메시지 추출
         messages = openai.beta.threads.messages.list(thread_id=st.session_state.thread_id)
         for msg in reversed(messages.data):
             if msg.role == "assistant":
@@ -131,5 +128,3 @@ if st.button("전송") and uploaded_file and question.strip():
 for chat in st.session_state.chat_history:
     st.markdown(f"**🙋 질문:** {chat['question']}")
     st.markdown(f"**🤖 응답:** {chat['answer']}")
-
-
