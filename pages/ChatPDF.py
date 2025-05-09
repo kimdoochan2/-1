@@ -39,12 +39,13 @@ question = st.text_input("궁금한 내용을 입력하세요:")
 # --- 초기 어시스턴트 생성
 def init_assistant(file_id):
     assistant = openai.beta.assistants.create(
-        name="PDF Assistant",
-        instructions="사용자가 업로드한 PDF 내용을 바탕으로 질문에 답하세요.",
-        model="gpt-4",
-        tools=[{"type": "file_search"}],
-        file_ids=[file_id]
-    )
+    name="PDF Assistant",
+    instructions="사용자가 업로드한 PDF 내용을 바탕으로 질문에 답하세요.",
+    model="gpt-4-turbo",  # ✅ 여기 수정!
+    tools=[{"type": "file_search"}],
+    file_ids=[file_id]
+)
+
     st.session_state.assistant_id = assistant.id
 
 # --- 쓰레드 생성
