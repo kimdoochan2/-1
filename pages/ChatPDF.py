@@ -1,10 +1,10 @@
-import openai
-st.sidebar.write("📦 OpenAI 버전:", openai.__version__)
 
 import streamlit as st
 from openai import OpenAI
 import tempfile
 import time
+import openai
+st.sidebar.write("📦 OpenAI 버전:", openai.__version__)
 
 st.set_page_config(page_title="ChatPDF", layout="centered")
 
