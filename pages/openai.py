@@ -1,83 +1,44 @@
 import streamlit as st
-from PyPDF2 import PdfReader
 import openai
-from langchain.text_splitter import CharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
 
-# ------------------- Streamlit 앱 -------------------
-st.set_page_config(page_title="ChatPDF", page_icon="📄")
-st.title("📄 ChatPDF: PDF 문서와 대화하기 (안정화 버전)")
+st.set_page_config(page_title="GPT-4.1-mini Q&A", page_icon="🤖")
+st.title("🤖 GPT-4.1-mini 질문 응답기")
 
-# ------------------- API Key 입력 -------------------
-st.sidebar.header("설정")
-user_api_key = st.sidebar.text_input("🔑 OpenAI API Key 입력", type="password")
+# API Key 입력받고 session_state에 저장
+if 'api_key' not in st.session_state:
+    st.session_state['api_key'] = ''
 
-if user_api_key:
-    openai.api_key = user_api_key
+st.session_state['api_key'] = st.text_input(
+    label="OpenAI API Key를 입력하세요",
+    value=st.session_state['api_key'],
+    type="password"
+)
 
-    if "vectorstore" not in st.session_state:
-        st.session_state.vectorstore = None
+# API Key 설정
+if st.session_state['api_key']:
+    openai.api_key = st.session_state['api_key']
 
-    def extract_text_from_pdf(uploaded_file):
-        reader = PdfReader(uploaded_file)
-        text = ""
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text
-        return text
+    # 사용자 질문 입력
+    question = st.text_input("질문을 입력하세요:")
 
-    def create_vector_store(text):
-        text_splitter = CharacterTextSplitter(
-            separator="\n",
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len
-        )
-        texts = text_splitter.split_text(text)
-        embeddings = OpenAIEmbeddings(openai_api_key=user_api_key)
-        vectorstore = FAISS.from_texts(texts, embeddings)
-        return vectorstore
-
-    def chat_with_pdf(vectorstore, user_question):
-        docs = vectorstore.similarity_search(user_question, k=3)
-        context = "\n\n".join([doc.page_content for doc in docs])
-        prompt = f"다음 문서를 참고하여 사용자의 질문에 답변하세요.\n\n문서:\n{context}\n\n질문: {user_question}\n답변:" 
-
-        response = openai.ChatCompletion.create(
-            model="gpt-4o",
+    @st.cache_data(show_spinner="모델이 응답 중입니다...", experimental_allow_widgets=True)
+    def get_gpt_response(prompt, api_key):
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4-1106-preview",  # gpt-4.1-mini 대체 모델 이름
             messages=[
-                {"role": "system", "content": "당신은 문서를 분석해주는 유능한 어시스턴트입니다."},
+                {"role": "system", "content": "당신은 도움이 되는 AI 어시스턴트입니다."},
                 {"role": "user", "content": prompt}
             ]
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content.strip()
 
-    uploaded_file = st.file_uploader("📥 PDF 파일 업로드 (1개만 가능)", type=["pdf"])
-
-    if uploaded_file:
-        with st.spinner("PDF 텍스트 추출 및 인덱스 생성 중..."):
-            pdf_text = extract_text_from_pdf(uploaded_file)
-            if pdf_text:
-                vectorstore = create_vector_store(pdf_text)
-                st.session_state.vectorstore = vectorstore
-                st.success("✅ 문서가 성공적으로 인덱싱되었습니다. 이제 질문하세요!")
-            else:
-                st.error("❌ PDF에서 텍스트를 추출할 수 없습니다.")
-
-    if st.session_state.vectorstore:
-        question = st.text_input("❓ 문서 기반으로 질문하세요:")
-
-        if question:
-            with st.spinner("💡 답변 생성 중..."):
-                answer = chat_with_pdf(st.session_state.vectorstore, question)
-                st.markdown(f"**📋 답변:** {answer}")
-
-        if st.button("🗑️ Clear (문서 및 인덱스 삭제)"):
-            st.session_state.vectorstore = None
-            st.success("🧹 문서와 인덱스가 삭제되었습니다.")
-
-    st.info("PDF 파일을 업로드하고 문서에 대해 자유롭게 질문해 보세요.")
+    if question:
+        try:
+            response_text = get_gpt_response(question, st.session_state['api_key'])
+            st.markdown("### 💡 GPT-4.1-mini의 답변")
+            st.write(response_text)
+        except Exception as e:
+            st.error(f"오류 발생: {e}")
 else:
-    st.warning("🔑 먼저 사이드바에 OpenAI API Key를 입력하세요.")
+    st.warning("먼저 OpenAI API Key를 입력하세요.")
