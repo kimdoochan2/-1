@@ -1,9 +1,9 @@
 # 📄 파일 위치: pages/3_ChatGPT_질문응답.py
 
 import streamlit as st
-import openai
+from openai import OpenAI
 
-st.title("🤖 GPT-4.1-mini 질문 응답 챗봇")
+st.title("🤖 GPT-4o 질문 응답 챗봇 (openai>=1.0 대응)")
 
 # --- API Key 입력 및 session_state 저장 ---
 if "api_key" not in st.session_state:
@@ -20,11 +20,11 @@ if api_key_input:
 question = st.text_input("질문을 입력하세요:")
 
 # --- GPT 호출 함수 (캐싱 사용) ---
-@st.cache_data(show_spinner="GPT-4.1-mini가 답변을 생성 중입니다...")
+@st.cache_data(show_spinner="GPT-4o가 답변을 생성 중입니다...")
 def get_gpt_answer(api_key, user_question):
-    openai.api_key = api_key
-    response = openai.ChatCompletion.create(
-        model="gpt-4o",  # 또는 gpt-4.1-mini가 정식 모델명이면 변경
+    client = OpenAI(api_key=api_key)
+    response = client.chat.completions.create(
+        model="gpt-4o",  # 또는 gpt-4.1-mini
         messages=[
             {"role": "system", "content": "당신은 친절하고 정확한 AI 조수입니다."},
             {"role": "user", "content": user_question}
@@ -32,7 +32,7 @@ def get_gpt_answer(api_key, user_question):
         max_tokens=500,
         temperature=0.5
     )
-    return response['choices'][0]['message']['content']
+    return response.choices[0].message.content
 
 # --- 실행 ---
 if st.session_state.api_key and question:
