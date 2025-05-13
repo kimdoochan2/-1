@@ -3,4 +3,4 @@ streamlit>=1.18
 PyPDF2
 langchain>=0.1.0
 langchain-openai>=0.1.0
-faiss-cpu
+faiss-cpu>=1.7.4 
