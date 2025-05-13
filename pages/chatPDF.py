@@ -1,66 +1,73 @@
 import streamlit as st
-from PyPDF2 import PdfReader
-from openai import OpenAI
+import openai
+import PyPDF2
+import os
+import tempfile
 
-# ------------------- 설정 -------------------
-openai_api_key = st.secrets["openai_api_key"]  # GitHub에 올릴 때 secrets 사용
-openai_client = OpenAI(api_key=openai_api_key)
+# OpenAI API key 설정 (환경변수나 secrets 사용 권장)
+openai.api_key = st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
 
-# ------------------- 함수 정의 -------------------
-def extract_text_from_pdf(uploaded_file):
-    reader = PdfReader(uploaded_file)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text()
-    return text
+st.set_page_config(page_title="ChatPDF Assistant", page_icon="📄")
+st.title("📄 ChatPDF Assistant")
+st.markdown("PDF 파일을 업로드하고 내용을 기반으로 자유롭게 대화하세요.")
 
-def create_vector_store(text, file_name):
-    file = openai_client.files.create(
-        file=(file_name, text.encode("utf-8")),
-        purpose="file_search"
-    )
-    return file.id
-
-def delete_vector_store(file_id):
-    openai_client.files.delete(file_id)
-
-def chat_with_file(file_id, user_question):
-    response = openai_client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant for reading documents."},
-            {"role": "user", "content": user_question}
-        ],
-        file_ids=[file_id]
-    )
-    return response.choices[0].message.content
-
-# ------------------- Streamlit 앱 -------------------
-st.title("📄 ChatPDF: PDF로 대화하기")
-
-if "file_id" not in st.session_state:
+# 세션 상태 초기화
+if 'file_id' not in st.session_state:
     st.session_state.file_id = None
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
 
+# 파일 업로더 (파일은 1개만 허용)
 uploaded_file = st.file_uploader("PDF 파일을 업로드하세요", type=["pdf"])
 
-if uploaded_file:
-    with st.spinner("PDF 파일 읽는 중..."):
-        pdf_text = extract_text_from_pdf(uploaded_file)
-        file_id = create_vector_store(pdf_text, uploaded_file.name)
-        st.session_state.file_id = file_id
-        st.success("벡터 스토어 생성 완료. 질문을 입력하세요!")
+# PDF를 임시 파일로 저장하고 OpenAI File로 업로드
+def upload_pdf_to_openai(file):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(file.read())
+        tmp_file_path = tmp_file.name
 
+    # 파일 업로드 (OpenAI File API)
+    response = openai.files.create(file=open(tmp_file_path, "rb"), purpose="assistants")
+    os.remove(tmp_file_path)  # 임시 파일 삭제
+    return response.id
+
+# Clear 버튼: file_id와 messages 모두 초기화
+if st.button("🗑️ Clear (Vector Store 초기화)"):
+    st.session_state.file_id = None
+    st.session_state.messages = []
+    st.success("Vector Store와 대화 기록이 초기화되었습니다.")
+
+# 파일 업로드 처리
+if uploaded_file is not None and st.session_state.file_id is None:
+    st.info("파일을 업로드 중입니다. 잠시만 기다려주세요...")
+    st.session_state.file_id = upload_pdf_to_openai(uploaded_file)
+    st.success("파일 업로드 성공! 이제 질문을 입력하세요.")
+
+# Chat 기능
 if st.session_state.file_id:
-    question = st.text_input("PDF에 대해 질문하세요")
+    user_input = st.text_input("💬 질문을 입력하세요", placeholder="예: 이 문서의 핵심 내용은 무엇인가요?")
 
-    if question:
+    if user_input:
+        # 메시지 히스토리 업데이트
+        st.session_state.messages.append({"role": "user", "content": user_input})
+
         with st.spinner("답변 생성 중..."):
-            answer = chat_with_file(st.session_state.file_id, question)
-            st.markdown(f"**답변:** {answer}")
+            # OpenAI Assistant API (File Search 사용)
+            response = openai.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "다음 파일 내용을 기반으로 답변하세요."},
+                    *st.session_state.messages
+                ],
+                file_ids=[st.session_state.file_id]
+            )
+            answer = response.choices[0].message.content
+            st.session_state.messages.append({"role": "assistant", "content": answer})
+            st.markdown(f"📝 **답변:** {answer}")
 
-    if st.button("Clear (벡터 스토어 삭제)"):
-        delete_vector_store(st.session_state.file_id)
-        st.session_state.file_id = None
-        st.success("벡터 스토어가 삭제되었습니다.")
-
-st.info("PDF를 업로드 후 질문을 입력하세요. GPT가 문서 기반으로 답변합니다.")
+    # 대화 히스토리 출력
+    if st.session_state.messages:
+        with st.expander("📜 이전 대화 보기", expanded=False):
+            for msg in st.session_state.messages:
+                role = "👤 사용자" if msg["role"] == "user" else "🤖 Assistant"
+                st.markdown(f"**{role}:** {msg['content']}")
