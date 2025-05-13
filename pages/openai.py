@@ -1,6 +1,6 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-from openai import OpenAI
+import openai
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
@@ -14,7 +14,7 @@ st.sidebar.header("설정")
 user_api_key = st.sidebar.text_input("🔑 OpenAI API Key 입력", type="password")
 
 if user_api_key:
-    openai_client = OpenAI(api_key=user_api_key)
+    openai.api_key = user_api_key
 
     if "vectorstore" not in st.session_state:
         st.session_state.vectorstore = None
@@ -45,7 +45,7 @@ if user_api_key:
         context = "\n\n".join([doc.page_content for doc in docs])
         prompt = f"다음 문서를 참고하여 사용자의 질문에 답변하세요.\n\n문서:\n{context}\n\n질문: {user_question}\n답변:" 
 
-        response = openai_client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": "당신은 문서를 분석해주는 유능한 어시스턴트입니다."},
