@@ -3,7 +3,7 @@ from openai import OpenAI
 import tempfile
 import time
 
-st.title("📄 ChatPDF (질문창 항상 보이게 개선)")
+st.title("📄 ChatPDF (2025 최신 OpenAI Assistant 버전)")
 
 # --- session_state 초기화 ---
 if "api_key" not in st.session_state:
@@ -21,24 +21,21 @@ if "file_id" not in st.session_state:
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = None
 
-# --- OpenAI client 생성 함수 ---
 def get_client():
     return OpenAI(api_key=st.session_state.api_key)
 
 # --- API Key 입력 ---
 api_key_input = st.text_input(
-    "OpenAI API Key를 입력하세요", 
-    type="password", 
+    "OpenAI API Key를 입력하세요",
+    type="password",
     value=st.session_state.api_key
 )
-
 if api_key_input:
     st.session_state.api_key = api_key_input
 
 # --- 파일 업로드 ---
 uploaded_file = st.file_uploader("📥 PDF 파일을 업로드하세요", type=["pdf"])
 
-# --- 파일 업로드 + Assistant 생성 ---
 if st.session_state.api_key and uploaded_file and not st.session_state.file_uploaded:
     client = get_client()
     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
@@ -55,7 +52,7 @@ if st.session_state.api_key and uploaded_file and not st.session_state.file_uplo
         name="ChatPDF Assistant",
         instructions="사용자가 업로드한 PDF 파일을 참고하여 질문에 답하세요.",
         model="gpt-4o",
-        file_ids=[file.id]
+        tools=[{"type": "file_search", "file_search": {"files": [file.id]}}]   # ✅ 최신 수정
     )
     st.session_state.assistant_id = assistant.id
 
@@ -63,7 +60,7 @@ if st.session_state.api_key and uploaded_file and not st.session_state.file_uplo
     st.session_state.thread_id = thread.id
 
     st.session_state.file_uploaded = True
-    st.success("✅ 파일 업로드 및 Assistant 준비 완료!")
+    st.success("✅ 파일 업로드 및 Assistant 생성 완료!")
 
 # --- Clear 버튼 ---
 if st.button("🧹 Clear (파일 + Assistant 삭제)"):
@@ -81,7 +78,7 @@ if st.button("🧹 Clear (파일 + Assistant 삭제)"):
         st.session_state[key] = None if key != "file_uploaded" else False
     st.rerun()
 
-# --- ✅ 반드시 질문 입력창 보이게 ---
+# --- 질문창 항상 활성화 ---
 if st.session_state.file_uploaded:
     st.markdown("### 💬 ChatPDF와 대화")
     with st.form(key="chatpdf_form", clear_on_submit=True):
@@ -114,8 +111,6 @@ if st.session_state.file_uploaded:
         messages = client.beta.threads.messages.list(
             thread_id=st.session_state.thread_id
         )
-
-        # 가장 최근 assistant 답변 출력
         for msg in messages.data:
             if msg.role == "assistant":
                 st.markdown(f"**🤖 Assistant:** {msg.content[0].text.value}")
