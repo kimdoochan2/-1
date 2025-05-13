@@ -27,7 +27,10 @@ if api_key:
             tmp_file.write(file.read())
             tmp_file_path = tmp_file.name
 
-        response = client.files.create(file=open(tmp_file_path, "rb"), purpose="assistants")
+        response = client.files.create(
+            file=open(tmp_file_path, "rb"),
+            purpose="assistants"
+        )
         os.remove(tmp_file_path)
         return response.id
 
@@ -42,8 +45,8 @@ if api_key:
         st.session_state.file_id = upload_pdf(uploaded_file)
         st.success("파일 업로드 성공!")
 
-        # ✅ Assistant 생성 (file_search tool 선언)
-        assistant = client.beta.assistants.create_assistant(
+        # ✅ Assistant 생성
+        assistant = client.beta.assistants.create(
             name="ChatPDF Assistant",
             instructions="업로드된 PDF 파일을 기반으로 질문에 답하세요.",
             model="gpt-4o",
@@ -59,7 +62,6 @@ if api_key:
         user_input = st.text_input("💬 질문:", placeholder="문서에 대해 궁금한 점을 입력하세요.")
 
         if user_input:
-            # ✅ 사용자 메시지 추가 (file_ids로 파일 attach)
             client.beta.threads.messages.create(
                 thread_id=st.session_state.thread_id,
                 role="user",
@@ -67,13 +69,11 @@ if api_key:
                 attachments=[{"file_id": st.session_state.file_id, "tools": [{"type": "file_search"}]}]
             )
 
-            # ✅ Assistant 실행
             run = client.beta.threads.runs.create(
                 thread_id=st.session_state.thread_id,
                 assistant_id=st.session_state.assistant_id
             )
 
-            # ✅ 실행 완료 대기
             with st.spinner("답변 생성 중..."):
                 while run.status not in ["completed", "failed", "cancelled"]:
                     time.sleep(1)
