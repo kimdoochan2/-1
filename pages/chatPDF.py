@@ -1,105 +1,66 @@
 import streamlit as st
+from PyPDF2 import PdfReader
 from openai import OpenAI
-import tempfile
-import time
 
-st.title("📄 ChatPDF (2025 공식 완전판)")
+# ------------------- 설정 -------------------
+openai_api_key = st.secrets["openai_api_key"]  # GitHub에 올릴 때 secrets 사용
+openai_client = OpenAI(api_key=openai_api_key)
 
-if "api_key" not in st.session_state:
-    st.session_state.api_key = ""
+# ------------------- 함수 정의 -------------------
+def extract_text_from_pdf(uploaded_file):
+    reader = PdfReader(uploaded_file)
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
+    return text
 
-if "assistant_id" not in st.session_state:
-    st.session_state.assistant_id = None
+def create_vector_store(text, file_name):
+    file = openai_client.files.create(
+        file=(file_name, text.encode("utf-8")),
+        purpose="file_search"
+    )
+    return file.id
+
+def delete_vector_store(file_id):
+    openai_client.files.delete(file_id)
+
+def chat_with_file(file_id, user_question):
+    response = openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant for reading documents."},
+            {"role": "user", "content": user_question}
+        ],
+        file_ids=[file_id]
+    )
+    return response.choices[0].message.content
+
+# ------------------- Streamlit 앱 -------------------
+st.title("📄 ChatPDF: PDF로 대화하기")
 
 if "file_id" not in st.session_state:
     st.session_state.file_id = None
 
-if "thread_id" not in st.session_state:
-    st.session_state.thread_id = None
-
-def get_client():
-    return OpenAI(api_key=st.session_state.api_key)
-
-api_key_input = st.text_input("OpenAI API Key", type="password", value=st.session_state.api_key)
-if api_key_input:
-    st.session_state.api_key = api_key_input
-
 uploaded_file = st.file_uploader("PDF 파일을 업로드하세요", type=["pdf"])
 
-if st.session_state.api_key and uploaded_file and not st.session_state.file_id:
-    client = get_client()
-    with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-        tmp_file.write(uploaded_file.getvalue())
-        tmp_file_path = tmp_file.name
+if uploaded_file:
+    with st.spinner("PDF 파일 읽는 중..."):
+        pdf_text = extract_text_from_pdf(uploaded_file)
+        file_id = create_vector_store(pdf_text, uploaded_file.name)
+        st.session_state.file_id = file_id
+        st.success("벡터 스토어 생성 완료. 질문을 입력하세요!")
 
-    file_response = client.files.create(
-        file=open(tmp_file_path, "rb"),
-        purpose="assistants"
-    )
-    st.session_state.file_id = file_response.id
+if st.session_state.file_id:
+    question = st.text_input("PDF에 대해 질문하세요")
 
-    # ✅ 진짜 최신 방식
-    assistant_response = client.beta.assistants.create(
-        name="ChatPDF Assistant",
-        instructions="사용자가 업로드한 PDF 파일을 참고하여 질문에 답하세요.",
-        model="gpt-4o",
-        tools=[{"type": "file_search", "file_search": {"files": [file_response.id]}}]
-    )
-    st.session_state.assistant_id = assistant_response.id
+    if question:
+        with st.spinner("답변 생성 중..."):
+            answer = chat_with_file(st.session_state.file_id, question)
+            st.markdown(f"**답변:** {answer}")
 
-    thread_response = client.beta.threads.create()
-    st.session_state.thread_id = thread_response.id
+    if st.button("Clear (벡터 스토어 삭제)"):
+        delete_vector_store(st.session_state.file_id)
+        st.session_state.file_id = None
+        st.success("벡터 스토어가 삭제되었습니다.")
 
-    st.success("파일과 Assistant가 준비되었습니다.")
-
-if st.button("🧹 Clear"):
-    client = get_client()
-    try:
-        if st.session_state.assistant_id:
-            client.beta.assistants.delete(st.session_state.assistant_id)
-        if st.session_state.file_id:
-            client.files.delete(st.session_state.file_id)
-    except Exception as e:
-        st.warning(f"삭제 오류: {e}")
-
-    for key in ["assistant_id", "file_id", "thread_id"]:
-        st.session_state[key] = None
-    st.rerun()
-
-if st.session_state.assistant_id and st.session_state.thread_id:
-    st.markdown("### 💬 ChatPDF와 대화")
-    with st.form(key="chatpdf_form", clear_on_submit=True):
-        user_input = st.text_input("질문을 입력하세요:")
-        submitted = st.form_submit_button("보내기")
-
-    if submitted and user_input:
-        client = get_client()
-        client.beta.threads.messages.create(
-            thread_id=st.session_state.thread_id,
-            role="user",
-            content=user_input
-        )
-
-        run = client.beta.threads.runs.create(
-            thread_id=st.session_state.thread_id,
-            assistant_id=st.session_state.assistant_id
-        )
-
-        with st.spinner("Assistant가 답변 중..."):
-            while True:
-                run_status = client.beta.threads.runs.retrieve(
-                    thread_id=st.session_state.thread_id,
-                    run_id=run.id
-                )
-                if run_status.status == "completed":
-                    break
-                time.sleep(1)
-
-        messages = client.beta.threads.messages.list(thread_id=st.session_state.thread_id)
-        for msg in messages.data:
-            if msg.role == "assistant":
-                st.markdown(f"**Assistant:** {msg.content[0].text.value}")
-                break
-else:
-    st.info("PDF 파일을 업로드하고 API Key를 입력하세요.")
-
+st.info("PDF를 업로드 후 질문을 입력하세요. GPT가 문서 기반으로 답변합니다.")
