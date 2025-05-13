@@ -1,5 +1,3 @@
-# 📄 파일 위치: pages/3_ChatGPT_질문응답_개선버전.py
-
 import streamlit as st
 from openai import OpenAI
 
@@ -29,7 +27,7 @@ if st.button("🧹 대화 초기화"):
     st.session_state.messages = [
         {"role": "system", "content": "당신은 친절하고 정확한 AI 조수입니다."}
     ]
-    st.experimental_rerun()
+    st.rerun()  # ✅ 최신 Streamlit 대응
 
 # --- 이전 대화 내용 출력 ---
 for msg in st.session_state.messages[1:]:  # system 메시지는 제외
@@ -58,6 +56,6 @@ if st.session_state.api_key and question:
     with st.spinner("GPT-4o가 답변 중입니다..."):
         answer = get_gpt_response(st.session_state.api_key, st.session_state.messages)
     st.session_state.messages.append({"role": "assistant", "content": answer})
-    st.experimental_rerun()
+    st.rerun()  # ✅ 최신 Streamlit 대응
 elif not st.session_state.api_key:
     st.info("먼저 OpenAI API Key를 입력하세요.")
