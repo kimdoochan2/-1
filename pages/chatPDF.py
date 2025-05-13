@@ -3,11 +3,14 @@ from openai import OpenAI
 import tempfile
 import time
 
-st.title("📄 ChatPDF (최종 개선 버전)")
+st.title("📄 ChatPDF (질문창 항상 보이게 개선)")
 
 # --- session_state 초기화 ---
 if "api_key" not in st.session_state:
     st.session_state.api_key = ""
+
+if "file_uploaded" not in st.session_state:
+    st.session_state.file_uploaded = False
 
 if "assistant_id" not in st.session_state:
     st.session_state.assistant_id = None
@@ -33,10 +36,10 @@ if api_key_input:
     st.session_state.api_key = api_key_input
 
 # --- 파일 업로드 ---
-uploaded_file = st.file_uploader("PDF 파일을 업로드하세요 (최대 1개)", type=["pdf"])
+uploaded_file = st.file_uploader("📥 PDF 파일을 업로드하세요", type=["pdf"])
 
-# --- 파일 업로드 및 Assistant 생성 ---
-if st.session_state.api_key and uploaded_file and not st.session_state.file_id:
+# --- 파일 업로드 + Assistant 생성 ---
+if st.session_state.api_key and uploaded_file and not st.session_state.file_uploaded:
     client = get_client()
     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
         tmp_file.write(uploaded_file.getvalue())
@@ -59,7 +62,8 @@ if st.session_state.api_key and uploaded_file and not st.session_state.file_id:
     thread = client.beta.threads.create()
     st.session_state.thread_id = thread.id
 
-    st.success("✅ 파일 업로드 및 Assistant 생성 완료!")
+    st.session_state.file_uploaded = True
+    st.success("✅ 파일 업로드 및 Assistant 준비 완료!")
 
 # --- Clear 버튼 ---
 if st.button("🧹 Clear (파일 + Assistant 삭제)"):
@@ -73,13 +77,12 @@ if st.button("🧹 Clear (파일 + Assistant 삭제)"):
         except Exception as e:
             st.warning(f"삭제 중 오류: {e}")
 
-    st.session_state.assistant_id = None
-    st.session_state.file_id = None
-    st.session_state.thread_id = None
+    for key in ["assistant_id", "file_id", "thread_id", "file_uploaded"]:
+        st.session_state[key] = None if key != "file_uploaded" else False
     st.rerun()
 
-# --- ✅ 항상 질문 입력창 활성화 ---
-if st.session_state.assistant_id and st.session_state.thread_id:
+# --- ✅ 반드시 질문 입력창 보이게 ---
+if st.session_state.file_uploaded:
     st.markdown("### 💬 ChatPDF와 대화")
     with st.form(key="chatpdf_form", clear_on_submit=True):
         user_input = st.text_input("PDF 내용 기반으로 질문을 입력하세요:")
@@ -112,11 +115,10 @@ if st.session_state.assistant_id and st.session_state.thread_id:
             thread_id=st.session_state.thread_id
         )
 
-        # 가장 최근 assistant 답변 찾기
+        # 가장 최근 assistant 답변 출력
         for msg in messages.data:
             if msg.role == "assistant":
                 st.markdown(f"**🤖 Assistant:** {msg.content[0].text.value}")
                 break
 else:
-    st.info("먼저 OpenAI API Key를 입력하고 PDF 파일을 업로드하세요.")
-
+    st.info("먼저 PDF 파일을 업로드하세요.")
