@@ -6,7 +6,8 @@ from langchain_openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 
 # ------------------- Streamlit 앱 -------------------
-st.title("📄 ChatPDF: PDF 문서와 대화하기 (FAISS 버전)")
+st.set_page_config(page_title="ChatPDF", page_icon="📄")
+st.title("📄 ChatPDF: PDF 문서와 대화하기 (안정화 버전)")
 
 # ------------------- API Key 입력 -------------------
 st.sidebar.header("설정")
@@ -22,7 +23,9 @@ if user_api_key:
         reader = PdfReader(uploaded_file)
         text = ""
         for page in reader.pages:
-            text += page.extract_text()
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text
         return text
 
     def create_vector_store(text):
@@ -33,7 +36,6 @@ if user_api_key:
             length_function=len
         )
         texts = text_splitter.split_text(text)
-
         embeddings = OpenAIEmbeddings(openai_api_key=user_api_key)
         vectorstore = FAISS.from_texts(texts, embeddings)
         return vectorstore
@@ -52,27 +54,30 @@ if user_api_key:
         )
         return response.choices[0].message.content
 
-    uploaded_file = st.file_uploader("PDF 파일을 업로드하세요 (1개만 가능)", type=["pdf"])
+    uploaded_file = st.file_uploader("📥 PDF 파일 업로드 (1개만 가능)", type=["pdf"])
 
     if uploaded_file:
-        with st.spinner("PDF 텍스트를 추출하고 벡터스토어를 구축 중입니다..."):
+        with st.spinner("PDF 텍스트 추출 및 인덱스 생성 중..."):
             pdf_text = extract_text_from_pdf(uploaded_file)
-            vectorstore = create_vector_store(pdf_text)
-            st.session_state.vectorstore = vectorstore
-            st.success("문서가 성공적으로 업로드되고 인덱싱되었습니다. 질문을 입력하세요!")
+            if pdf_text:
+                vectorstore = create_vector_store(pdf_text)
+                st.session_state.vectorstore = vectorstore
+                st.success("✅ 문서가 성공적으로 인덱싱되었습니다. 이제 질문하세요!")
+            else:
+                st.error("❌ PDF에서 텍스트를 추출할 수 없습니다.")
 
     if st.session_state.vectorstore:
-        question = st.text_input("문서에 대해 질문하세요:")
+        question = st.text_input("❓ 문서 기반으로 질문하세요:")
 
         if question:
-            with st.spinner("GPT가 답변을 생성 중입니다..."):
+            with st.spinner("💡 답변 생성 중..."):
                 answer = chat_with_pdf(st.session_state.vectorstore, question)
-                st.markdown(f"**답변:** {answer}")
+                st.markdown(f"**📋 답변:** {answer}")
 
-        if st.button("Clear (문서 삭제)"):
+        if st.button("🗑️ Clear (문서 및 인덱스 삭제)"):
             st.session_state.vectorstore = None
-            st.success("문서 및 인덱스가 삭제되었습니다.")
+            st.success("🧹 문서와 인덱스가 삭제되었습니다.")
 
-    st.info("PDF 파일을 업로드 후 질문을 입력하세요. 문서 기반으로 대답합니다.")
+    st.info("PDF 파일을 업로드하고 문서에 대해 자유롭게 질문해 보세요.")
 else:
-    st.warning("먼저 사이드바에 OpenAI API Key를 입력하세요.")
+    st.warning("🔑 먼저 사이드바에 OpenAI API Key를 입력하세요.")
