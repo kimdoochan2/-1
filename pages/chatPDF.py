@@ -4,8 +4,8 @@ import PyPDF2
 import tempfile
 import os
 
-# ✅ OpenAI client 초기화
-client = openai.OpenAI(
+# ✅ OpenAI client 초기화 (정확한 버전)
+client = openai.Client(
     api_key=st.secrets["OPENAI_API_KEY"] if "OPENAI_API_KEY" in st.secrets else os.getenv("OPENAI_API_KEY")
 )
 
@@ -13,13 +13,11 @@ st.set_page_config(page_title="ChatPDF Assistant", page_icon="📄")
 st.title("📄 ChatPDF Assistant")
 st.markdown("PDF 파일을 업로드하고 내용을 기반으로 자유롭게 대화하세요.")
 
-# ✅ 세션 상태 초기화
 if 'file_id' not in st.session_state:
     st.session_state.file_id = None
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
-# ✅ 파일 업로더
 uploaded_file = st.file_uploader("📂 PDF 파일을 업로드하세요", type=["pdf"])
 
 def upload_pdf_to_openai(file):
@@ -31,19 +29,16 @@ def upload_pdf_to_openai(file):
     os.remove(tmp_file_path)
     return response.id
 
-# ✅ Clear 버튼
 if st.button("🗑️ Clear (Vector Store 초기화)"):
     st.session_state.file_id = None
     st.session_state.messages = []
-    st.success("Vector Store와 대화 기록이 초기화되었습니다.")
+    st.success("초기화 완료!")
 
-# ✅ 파일 업로드 처리
 if uploaded_file is not None and st.session_state.file_id is None:
-    st.info("파일을 OpenAI에 업로드 중입니다...")
+    st.info("파일 업로드 중...")
     st.session_state.file_id = upload_pdf_to_openai(uploaded_file)
-    st.success("업로드 성공! 이제 질문을 입력하세요.")
+    st.success("업로드 성공! 질문을 입력하세요.")
 
-# ✅ Chat 기능
 if st.session_state.file_id:
     user_input = st.text_input("💬 질문을 입력하세요", placeholder="예: 이 문서의 핵심 내용은?")
 
@@ -54,7 +49,7 @@ if st.session_state.file_id:
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {"role": "system", "content": "다음 파일 내용을 기반으로 답변하세요."},
+                    {"role": "system", "content": "업로드한 PDF를 참고해 답변하세요."},
                     *st.session_state.messages
                 ],
                 file_ids=[st.session_state.file_id]
@@ -63,7 +58,6 @@ if st.session_state.file_id:
             st.session_state.messages.append({"role": "assistant", "content": answer})
             st.markdown(f"🤖 **답변:** {answer}")
 
-    # ✅ 대화 기록 출력
     if st.session_state.messages:
         with st.expander("📜 대화 기록 보기", expanded=False):
             for msg in st.session_state.messages:
