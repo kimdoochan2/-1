@@ -1,3 +1,4 @@
 openai>=1.26.0
 streamlit>=1.18
 PyPDF2
+langchain>=0.1.0
